@@ -1,7 +1,6 @@
 package main
 
-// TODO: Replace 'GoSeed' with the right package name
-import "github.com/johandry/GoSeed/version"
+import "github.com/johandry/__APPNAME__/version"
 
 func main() {
 	version.Println()

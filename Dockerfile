@@ -18,7 +18,6 @@ RUN echo \
 # Application image
 FROM scratch AS application
 
-# TODO: Rename 'app' to the application name
-COPY --from=build /app .
+COPY --from=build /__APPNAME__ .
 
-CMD [ "./app" ]
+CMD [ "./__APPNAME__" ]

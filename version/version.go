@@ -22,8 +22,7 @@ var (
 
 	// AppName is the application name to show with the version. It may be empty
 	// but looks good to have a name.
-	// TODO: Replace 'App' with the correct application name.
-	AppName = "App"
+	AppName = "__APPNAME__"
 )
 
 // Println prints the version using the output of String()

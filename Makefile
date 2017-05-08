@@ -1,6 +1,6 @@
 #===============================================================================
 # Author: Johandry Amador <johandry@gmail.com>
-# Title:  TODO: Set the project title
+# Title:  Makefile to automate all the builds, tests and deployments.
 #
 # Usage: make [<rule>]
 #
@@ -15,9 +15,9 @@
 # Description: This Makefile is to create a container to build this application
 # and ship it.
 # Use 'make help' to view all the options or go to
-# https://github.com/johandry/...
+# https://github.johandry/__APPNAME__
 #
-# Report Issues or create Pull Requests in https://github.com/johandry/...
+# Report Issues or create Pull Requests in https://github.johandry/__APPNAME__
 #===============================================================================
 
 ## Variables (Modify their values if needed):
@@ -111,7 +111,17 @@ help:
 
 # display the version of this project
 version:
-	@$(ECHO) "$(C_GREEN)Version:$(C_STD) v$(VERSION)-$(PRE_RELEASE) ($(GIT_COMMIT)$(GIT_DIRTY))"
+	@$(ECHO) "$(C_GREEN)Version:$(C_STD) v$(VERSION)-$(PRE_RELEASE) ($(GIT_COMMIT)$(GIT_DIRTY))$(C_STD)"
+# DELETE.START
+init:
+	@if [[ '$(PKG_NAME)' == 'goseed' ]]; then $(ECHO) "$(C_RED)$(I_CROSS) Rename this directory with your application name or use env PKG_NAME different to $(PKG_NAME).\nExample: $(C_YELLOW)make init PKG_NAME=MyApp$(C_STD)" && false; fi
+	@$(ECHO) "$(C_GREEN)Initializing the project with name: $(C_YELLOW)$(PKG_NAME)$(C_STD)"
+	@grep -r '__APPNAME__' * | cut -f1 -d: | sort | uniq | while read f; do sed -i .bkp 's/__APPNAME__/$(PKG_NAME)/g' $$f; rm -f $$f.bkp; done
+	@$(RM) -r .git
+	@git init
+	@sed -i.org '/^# DELETE.START/,/^# DELETE.END/d' Makefile
+	@$(RM) Makefile.org
+# DELETE.END
 
 ## Main Rules:
 ## -----------------------------------------------------------------------------
