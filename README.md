@@ -8,10 +8,9 @@ Make and other Linux commands are also required, so run this on OSX or Linux. Fo
 
 ## Quick Start
 
-Clone the repository, rename the directory with the name of your application or package, and run `make init`:
+Clone the repository using the name of the application or package, and run `make init`:
 
-    git clone --depth=1 https://github.com/johandry/GoSeed.git
-    mv GoSeed MyApp
+    git clone --depth=1 https://github.com/johandry/GoSeed.git MyApp
     cd MyApp
     make init
 
@@ -23,10 +22,11 @@ The project comes with simple Go program to print the version number. Do the mod
 
 The `.git` directory is recreated but you may need to configure your new project to a new Github repository:
 
+    echo "# MyApp" > README.md
     git add .
     git commit -m "First commit"
-    remote add origin https://github.com/johandry/MyApp.git
-    git push
+    git remote add origin https://github.com/johandry/MyApp.git
+    git push -u origin master
 
 ## Builds
 
@@ -34,9 +34,15 @@ The Makefile is ready to build your code for your OS, all the OS and ship it in 
 
 To test and build your code for your OS, use `make` or `make build`. This will download all the vendors the code use, test it (if there is any test) and build it, placing the binary in `bin/`.
 
-To build the application for every OS and architecture, review in the Makefile the variables `C_OS` and `C_ARCH` at the top of the file, and update the required OS and architectures to build the application. Then execute `make all`. The binaries will be located in `pkg/{version}/{os}/{arch}/`
+    make
+    ./bin/myapp
 
-To create a container with the binary execute `make image`. This will create a Docker image based on `scratch` with the application. When the build is done you can view your images with `make ls` and run the application with `make run`, like this:
+To build the application for every OS and architecture, review in the Makefile the variables `C_OS` and `C_ARCH` at the top of the file, and update the required OS and architectures to build the application. Then execute `make build-all`. The binaries will be located in `pkg/{version}/{os}/{arch}/`
+
+    make build-all
+    ls -al pkg/*/*/*
+
+To create a container with the binary execute `make image`. This will create a Docker image based on `scratch` with the application. **This build will fail if the project do not have a Github repository**, so configure git as explained above and commit/push it to Github. When the build is done you can view your images with `make ls` and run the application with `make run`, like this:
 
     make image
     make ls
@@ -44,4 +50,4 @@ To create a container with the binary execute `make image`. This will create a D
 
 If you want the 3 builds just execute `make all`.
 
-To clean the repository of binaries, execute `make clean`. Optionally, you can remove every image and containers with `make clean-all`, just be careful, this will *delete every image and container in your system*.
+To clean the repository of binaries, execute `make clean`. Optionally, you can remove every image and containers with `make clean-all`, just be careful, this will **delete every image and container in your system**.

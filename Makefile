@@ -168,7 +168,7 @@ image:
 # vendor/vendor.json
 vendor-init:
 	@$(ECHO) "$(C_GREEN)Initializing vendors$(C_STD)"
-	@[[ ! -x $${GOPATH}/bin/govendor ]] && go get -u github.com/kardianos/govendor
+	-@[[ ! -x $${GOPATH}/bin/govendor ]] && go get -u github.com/kardianos/govendor
 	@govendor init
 	@govendor list -no-status +missing | xargs -n1 go get -u
 	@govendor add +external
