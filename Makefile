@@ -35,6 +35,10 @@ C_OS         ?= linux darwin
 # C_OS        ?= "linux darwin windows freebsd openbsd solaris"
 BIN 					= bin
 PKG 					= pkg
+# The repository or package name may be different to the binary name.
+BIN_NAME			= __APPNAME__
+# By defaut will build the container from scratch
+FROM 				 ?= scratch
 
 # Constants (You would not want to modify them):
 ## -----------------------------------------------------------------------------
@@ -44,18 +48,20 @@ GIT_COMMIT		=	$(shell git rev-parse --short HEAD  2>/dev/null || echo 'unknown')
 GIT_DIRTY			= $(shell test -n "`git status --porcelain`" && echo "+CHANGES" || true)
 PKG_NAME   		= $(shell echo $(CURDIR) | rev | cut -f1 -d/ | rev | tr '[A-Z]' '[a-z]')
 PKG_BASE 			= $(shell dirname $$(go list .))
+TESTARGS 			= -cover
+VETARGS 			= -v
 
 VERSION 			= $(shell sed -n 's/^.*Version = "\(.*\)"$$/\1/p' version/latest.go)
 PRE_RELEASE 	= $(shell sed -n 's/^.*VersionPrerelease = "\(.*\)"$$/\1/p' version/latest.go)
-BINARY 				= $(BIN)/$(PKG_NAME)
-LDFLAGS 			= -ldflags "\
+BINARY 				= $(BIN)/$(BIN_NAME)
+LDFLAGS 			= -ldflags '\
 	-X $(PKG_BASE)/$(PKG_NAME)/version.GitCommit=$(GIT_COMMIT)$(GIT_DIRTY) \
 	-X $(PKG_BASE)/$(PKG_NAME)/version.Version=$(VERSION) \
-	-X $(PKG_BASE)/$(PKG_NAME)/version.VersionPrerelease=$(PRE_RELEASE)"
+	-X $(PKG_BASE)/$(PKG_NAME)/version.VersionPrerelease=$(PRE_RELEASE)'
 
 # Docker variables:
-DOCKER_IMG  	= $(PKG_NAME)
-DOCKER_CON  	= $(PKG_NAME)
+DOCKER_IMG  	= $(BIN_NAME)
+DOCKER_CON  	= $(BIN_NAME)
 
 # Output:
 NO_COLOR 		 ?= false
@@ -99,7 +105,7 @@ default: build
 
 # all is to execute the entire process to create a Presto AMI and a Presto
 # Cluster.
-all: clean build build-all image run
+all: clean build build-all build-image run
 
 # help to print all the commands and what they are for
 help:
@@ -117,6 +123,7 @@ init:
 	@if [[ '$(PKG_NAME)' == 'goseed' ]]; then $(ECHO) "$(C_RED)$(I_CROSS) Rename this directory with your application name or use env PKG_NAME different to $(PKG_NAME).\nExample: $(C_YELLOW)make init PKG_NAME=MyApp$(C_STD)" && false; fi
 	@$(ECHO) "$(C_GREEN)Initializing the project with name: $(C_YELLOW)$(PKG_NAME)$(C_STD)"
 	@grep -r '__APPNAME__' * | cut -f1 -d: | sort | uniq | while read f; do sed -i .bkp 's/__APPNAME__/$(PKG_NAME)/g' $$f; rm -f $$f.bkp; done
+	@grep -r 'github.com/johandry' * | cut -f1 -d: | sort | uniq | while read f; do sed -i .bkp '#github.com/johandry/log#! s#github.com/johandry#$(PKG_BASE)#g' $$f; rm -f $$f.bkp; done
 	@$(RM) -r .git
 	@git init
 	@sed -i.org '/^# DELETE.START/,/^# DELETE.END/d' Makefile
@@ -126,41 +133,64 @@ init:
 ## Main Rules:
 ## -----------------------------------------------------------------------------
 
-# Application binary for this OS and Architecture
+# testing code
+test:
+	@$(ECHO) "$(C_GREEN)Testing$(C_STD)"
+	@go list ./... | grep -v -E '$(PKG_BASE)/$(PKG_NAME)/vendor' | xargs -n1 go test $(TESTARGS)
+
+# analyze the Go code to find suspiciou constructs (common mistakes)
+vet:
+	@$(ECHO) "$(C_GREEN)Suspicious Constructs (Vet)$(C_STD)"
+	@go list ./... | grep -v -E '$(PKG_BASE)/$(PKG_NAME)/vendor' | xargs -n1 go vet $(VETARGS)
+
+# checks the Go code for actual programming errors and style violations.
+golint:
+	-@[[ -x $${GOPATH}/bin/golint ]] || go get github.com/golang/lint/golint
+	@$(ECHO) "$(C_GREEN)Fiding coding style mistakes$(C_STD)"
+	@go list ./... | grep -v -E '$(PKG_BASE)/$(PKG_NAME)/vendor' | xargs -n1 golint
+
+# application binary for this OS and Architecture
 $(BINARY): build
 
 # build the application. The binary is located in $(BIN)/$(APP_NAME)
-build: vendors test
+build: vet golint test
 	@$(ECHO) "$(C_GREEN)Building $(C_YELLOW)v$(VERSION)-$(PRE_RELEASE) ($(GIT_COMMIT)$(GIT_DIRTY))$(C_GREEN) for $(C_YELLOW)$$(go env GOOS)$(C_STD)"
 	@go build $(LDFLAGS) -o $(BINARY) && \
 		$(ECHO) "$(C_GREEN)$(I_CHECK) Build completed at $(C_YELLOW)$(BINARY)$(C_STD)" || \
 		$(ECHO) "$(C_RED)$(I_CROSS) Build failed$(C_STD)"
 
-# Testing code
-test:
-	@$(ECHO) "$(C_GREEN)Testing$(C_STD)"
-	@go test -v
+# build the application for every OS and Architecture. The binaries are located
+# at $(PKG)/v$(VERSION)
+build-all:
+	@$(ECHO) "$(C_GREEN)Building $(C_YELLOW)v$(VERSION)-$(PRE_RELEASE) ($(GIT_COMMIT)$(GIT_DIRTY))$(C_GREEN) for:$(C_STD)"
+	@for os in $(C_OS); do \
+		$(ECHO) " $(C_BLUE)$(I_BULLET)$(C_GREEN)  $${os}$(C_STD)"; \
+		for arch in $(C_ARCH); do \
+			case  "$${os}/$${arch}" in \
+				"windows/arm" | "solaris/386" | "solaris/arm") true;; \
+				* ) $(ECHO) "   $(C_BLUE)$(I_BULLET)$(C_YELLOW)  $${arch}$(C_STD)"; \
+						GOOS=$${os} GOARCH=$${arch} go build $(LDFLAGS) -o $(PKG)/v$(VERSION)/$${os}/$${arch}/$(BIN_NAME);; esac \
+		done \
+	done
+	@$(ECHO) "$(C_GREEN) All binaries are located at $(C_YELLOW)$(PKG)/v$(VERSION)/$(C_STD)"
 
-# build the application for a Docker image
-build4docker: vendor-init test
-	@[[ -d /go ]] || ( $(ECHO) "$(C_RED)$(I_CROSS) This rule is to be executed only inside the $(APP_NAME) build image$(C_STD)"; false )
-	@$(ECHO) "$(C_GREEN)Building $(C_YELLOW)v$(VERSION)-$(PRE_RELEASE) ($(GIT_COMMIT)$(GIT_DIRTY))$(C_GREEN) for Linux $(C_YELLOW)$$(grep '^FROM .* AS application' Dockerfile | cut -f2 -d' ')$(C_STD)"
-	@CGO_ENABLED=0 \
-		GOOS=linux \
-		go build $(LDFLAGS) \
-      -a -installsuffix cgo \
-      -o /$(PKG_NAME) && \
-		$(ECHO) "$(C_GREEN)$(I_CHECK) Build completed at $(BINARY)$(C_STD)" || \
-		$(ECHO) "$(C_RED)$(I_CROSS) Build failed$(C_STD)"
-
-# build an image to build application with Go and a second image to ship it. The
-# build image (and any other without tag) will be deleted.
-image:
-	@$(ECHO) "$(C_GREEN)Building $(APP_NAME) and containerize it in image $(C_YELLOW)$(DOCKER_IMG)$(C_STD)"
-	@docker build \
+# build an image to build application with Go and a second image from $(FROM) to
+# ship it or use it for development. The build image (and any other without tag)
+# will be deleted.
+# Use parameter FROM=<image> to build the image based on a non scratch image. The
+# valid base images are in ./images/*
+build-image:
+	@[[ -d ./images/$(FROM) ]] || ($(ECHO) "$(C_RED)$(I_CROSS) There is no Dockerfile for $(FROM)$(C_STD)"; false )
+	@$(ECHO) "$(C_GREEN)Building $(APP_NAME) and containerize it in image $(C_YELLOW)$(DOCKER_IMG):$(FROM)$(C_STD)"
+	@docker build --rm \
 		--build-arg PKG_NAME=$(PKG_NAME) \
 		--build-arg PKG_BASE=$(PKG_BASE) \
-		-t $(DOCKER_IMG) .
+		--build-arg BIN_NAME=$(BIN_NAME) \
+		--build-arg GitCommit=$(GIT_COMMIT)$(GIT_DIRTY) \
+		--build-arg Version=$(VERSION) \
+		--build-arg VersionPrerelease=$(PRE_RELEASE) \
+		-t $(DOCKER_IMG):$(FROM) \
+		-f images/$(FROM)/Dockerfile .
 	@docker images | grep '<none>' | awk '{print $$3}' | while read i; do docker rmi -f $$i; done
 
 # get Govendor, initialize vendor/vendor.json, get the packages that do not
@@ -168,7 +198,7 @@ image:
 # vendor/vendor.json
 vendor-init:
 	@$(ECHO) "$(C_GREEN)Initializing vendors$(C_STD)"
-	-@[[ ! -x $${GOPATH}/bin/govendor ]] && go get -u github.com/kardianos/govendor
+	-@[[ -x $${GOPATH}/bin/govendor ]] || go get -u github.com/kardianos/govendor
 	@govendor init
 	@govendor list -no-status +missing | xargs -n1 go get -u
 	@govendor add +external
@@ -178,26 +208,28 @@ vendors:
 	@$(ECHO) "$(C_GREEN)Getting vendors$(C_STD)"
 	@govendor sync
 
-# Update libraries in $GOPATH and vendor/, then commit changes to git
+# update libraries in $GOPATH and vendor/
 vendor-update:
-	@echo "$(C_GREEN)Updating libraries and committing changes$(C_STD)"
+	@echo "$(C_GREEN)Updating libraries$(C_STD)"
 	-@govendor list -no-status +vendor | xargs -n1 go get -u
 	@govendor update +vendor
 	@git diff vendor/vendor.json | grep '"path": ' | sed 's/.*"path": "\(.*\)",/- \1/'
-	@git add vendor/vendor.json && git commit -m "New/Updated vendors"
+
+# @git add vendor/vendor.json && git commit -m "New/Updated vendors"
 
 # executes the application in the container. This executes only one node, to
 # have a cluster use `make cluster`
 run:
-	@$(ECHO) "$(C_GREEN)Running $(APP_NAME) from $(C_YELLOW)$(DOCKER_CON)$(C_STD)"
-	docker run --name $(DOCKER_CON) --rm -it $(DOCKER_IMG)
+	@[[ -d ./images/$(FROM) ]] || ($(ECHO) "$(C_RED)$(I_CROSS) There is no Dockerfile for $(FROM)$(C_STD)"; false )
+	@$(ECHO) "$(C_GREEN)Running $(APP_NAME) from $(C_YELLOW)$(DOCKER_CON)_$(FROM)$(C_STD)"
+	docker run --name $(DOCKER_CON)_$(FROM) --rm -it $(DOCKER_IMG):$(FROM) version
 
 # creates an application container and login into it. This may require to modify
 # the Dockerfile to use a different base and maybe the rule to use a different
 # shell
 sh:
-	@$(ECHO) "$(C_GREEN)Login into the $(APP_NAME) container$(C_STD)"
-	docker run --name $(DOCKER_CON) --rm -it $(DOCKER_IMG) /bin/bash --login
+	@$(ECHO) "$(C_GREEN)Login into the $(APP_NAME) Alpine container$(C_STD)"
+	docker run --name $(DOCKER_CON)_shell --rm -it --entrypoint="" $(DOCKER_IMG):alpine /bin/sh --login
 
 # remove the application image and every non-tagged image. The build image is a
 # non-tagged image but there may be others not related to this project, so use
@@ -227,19 +259,3 @@ ls:
 	@docker ps -a
 	@$(ECHO) "$(C_GREEN)Images:$(C_STD)"
 	@docker images
-
-# build the application for every OS and Architecture. The binaries are located
-# at $(PKG)/v$(VERSION)
-build-all:
-	@$(ECHO) "$(C_GREEN)Building $(C_YELLOW)v$(VERSION)-$(PRE_RELEASE) ($(GIT_COMMIT)$(GIT_DIRTY))$(C_GREEN) for:$(C_STD)"
-	@for os in $(C_OS); do \
-		$(ECHO) " $(C_BLUE)$(I_BULLET)$(C_GREEN)  $${os}$(C_STD)"; \
-		for arch in $(C_ARCH); do \
-			case  "$${os}/$${arch}" in \
-				"windows/arm" | "solaris/386" | "solaris/arm") true;; \
-				* ) $(ECHO) "   $(C_BLUE)$(I_BULLET)$(C_YELLOW)  $${arch}$(C_STD)"; \
-						GOOS=$${os} GOARCH=$${arch} go build $(LDFLAGS) -o $(PKG)/v$(VERSION)/$${os}/$${arch}/$(PKG_NAME);; \
-			esac \
-		done \
-	done
-	@$(ECHO) "$(C_GREEN) All binaries are located at $(C_YELLOW)$(PKG)/v$(VERSION)/$(C_STD)"

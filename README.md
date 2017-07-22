@@ -1,10 +1,11 @@
-# GoSeed: A seed for a Golang project
+# GoSeed: A seed for a Go project
 
 ## Requirements
 
-Go has to be installed and the environment variable `$GOPATH` setup as explained in https://golang.org/doc/install.
-Docker has to be installed. This have been used with [Docker CE for Mac](https://download.docker.com/mac/stable/Docker.dmg)
-Make and other Linux commands are also required, so run this on OSX or Linux. For Windows you may need a Linux emulator of your preference.
+  * **Go** has to be installed and the environment variable `$GOPATH` setup as explained in https://golang.org/doc/install.
+  * **Docker** is required to ship your program in containers. This have been used with [Docker CE for Mac](https://download.docker.com/mac/stable/Docker.dmg)
+
+This have been tested on Mac OSX and may work on Linux. For Windows you may need a Linux emulator.
 
 ## Quick Start
 
@@ -14,13 +15,18 @@ Clone the repository using the name of the application or package, and run `make
     cd MyApp
     make init
 
-If you are not me, then you may need to change any reference to `github.com/johandry` to your repository:
+The project comes with base Go program to:
+  * A Makefile to automate many development and testing tasks
+  * The Makefile builds the application in binaries for every OS/Architecture, a microcontainer (from scratch) and a container from Alpine.
+  * A version package, for every new version modify the file `version/latest.go`
+  * Print version with subcommand 'version'
+  * Logs to a file or Stderr, customizable with a flag, config file or environment variable
+  * Define a debugging log level with a flag, config file or environment variable
+  * Define a verbose log level (lower than debug) with a flag, config file or environment variable
+  * By default, the log level is lower than verbose and just print errors.
+  * Testing files.
 
-    grep -r 'github.com/johandry' *
-
-The project comes with simple Go program to print the version number. Do the modifications to the Go code according to your requirements.
-
-The `.git` directory is recreated but you may need to configure your new project to a new Github repository:
+The `.git` directory is recreated but you may need to configure your new project to a new Github repository. For example:
 
     echo "# MyApp" > README.md
     git add .

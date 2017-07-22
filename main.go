@@ -1,7 +1,7 @@
 package main
 
-import "github.com/johandry/__APPNAME__/version"
+import "github.com/johandry/__APPNAME__/cmd"
 
 func main() {
-	version.Println()
+	cmd.Execute()
 }
